@@ -78,8 +78,11 @@ def main(options, flags):
     
     tmp_map = 'buffer_tmp_%d' % os.getpid()
     try:
-        grass.run_command('v.buffer', input=line, output=tmp_map, distance=tol)
-        grass.run_command('v.overlay', ainput=in_map, binput=tmp_map, output=out_map, operator='not', overwrite=True)
+        grass.run_command('v.buffer', input=line, output=tmp_map, distance=tol, quiet=True)
+        grass.run_command('v.overlay', 
+            ainput=in_map, binput=tmp_map, output=out_map, operator='not', 
+            overwrite=True, quiet=True
+        )
     finally:
         grass.run_command('g.remove', vect=tmp_map, quiet=True)
 
