@@ -54,10 +54,7 @@
 #% multiple: no
 #%end
 
-import string
 import os, sys
-import time
-from math import sin, cos, sqrt
 
 if "GISBASE" not in os.environ:
     print "You must be in GRASS GIS to run this program."
