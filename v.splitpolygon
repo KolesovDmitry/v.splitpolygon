@@ -53,6 +53,10 @@
 #% required : no
 #% multiple: no
 #%end
+#%flag
+#% key: t
+#% description: Do not create attribute table
+#%end
 
 import os, sys
 
@@ -64,6 +68,7 @@ import grass.script as grass
 
 
 def main(options, flags):
+    t_flag = flags['t']
     in_map = options['input']
     line = options['line']
     out_map = options['output']
@@ -77,11 +82,30 @@ def main(options, flags):
     try:
         grass.run_command('v.buffer', input=line, output=tmp_map, distance=tol, quiet=True)
         grass.run_command('v.overlay', 
-            ainput=in_map, binput=tmp_map, output=out_map, operator='not', 
+            ainput=in_map, binput=tmp_map, output=out_map, operator='not',
+            flags = 't',
             overwrite=True, quiet=True
         )
     finally:
         grass.run_command('g.remove', vect=tmp_map, quiet=True)
+    
+    # Copy attribute table
+    if not t_flag:
+        p1 = grass.pipe_command('v.db.connect', map=in_map, flags='g')
+        conn_info = p1.stdout.readline()
+        p1.wait()
+        layer, table, field, db, driver = conn_info.split()
+        grass.run_command(
+             'db.copy', 
+             from_driver=driver, to_driver=driver,
+             from_table=table, to_table=out_map,
+             from_database=db, to_database=db,
+             quiet=True
+        )
+        grass.run_command('v.db.connect', 
+            map=out_map, driver=driver, database=db, key=field, layer=1, table=out_map, 
+            quiet=True
+        )   
 
 if __name__ == "__main__":
     options, flags = grass.parser()
