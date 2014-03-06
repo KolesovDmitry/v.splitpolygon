@@ -3,7 +3,7 @@
 #
 ############################################################################
 #
-# MODULE:      v.perpsegment
+# MODULE:      v.splitpolygon
 # AUTHOR(S):   Dmitry Kolesov (kolesov.dm@gmail.com);
 #
 # PURPOSE:     Split area by user defined line.
