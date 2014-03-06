@@ -65,6 +65,7 @@ if "GISBASE" not in os.environ:
     sys.exit(1)
 
 import grass.script as grass
+import csv
 
 
 def main(options, flags):
@@ -77,35 +78,72 @@ def main(options, flags):
         tol = 0.00001
     else:
         tol = float(tol)
-    
+
     tmp_map = 'buffer_tmp_%d' % os.getpid()
     try:
         grass.run_command('v.buffer', input=line, output=tmp_map, distance=tol, quiet=True)
-        grass.run_command('v.overlay', 
+        grass.run_command('v.overlay',
             ainput=in_map, binput=tmp_map, output=out_map, operator='not',
             flags = 't',
             overwrite=True, quiet=True
         )
     finally:
         grass.run_command('g.remove', vect=tmp_map, quiet=True)
-    
+
     # Copy attribute table
     if not t_flag:
-        p1 = grass.pipe_command('v.db.connect', map=in_map, flags='g')
-        conn_info = p1.stdout.readline()
-        p1.wait()
+        # Get category of the initial polygon
+        p = grass.pipe_command('v.category', input=in_map, option='print')
+        cat = p.stdout.readline().strip()
+        p.wait()
+
+        # Copy table
+        p = grass.pipe_command('v.db.connect', map=in_map, flags='g')
+        conn_info = p.stdout.readline()
+        p.wait()
         layer, table, field, db, driver = conn_info.split()
         grass.run_command(
-             'db.copy', 
+             'db.copy',
              from_driver=driver, to_driver=driver,
              from_table=table, to_table=out_map,
              from_database=db, to_database=db,
+             where="%s=%s" % (field, cat),
              quiet=True
         )
-        grass.run_command('v.db.connect', 
-            map=out_map, driver=driver, database=db, key=field, layer=1, table=out_map, 
+        grass.run_command('v.db.connect',
+            map=out_map, driver=driver, database=db, key=field, layer=1, table=out_map,
             quiet=True
-        )   
+        )
+
+        # Update attributes to conform the new categories of out_map
+        p = grass.pipe_command('v.db.select', map=out_map, where="%s=%s" % (field, cat))
+        reader = csv.DictReader(p.stdout, delimiter='|')
+        row = reader.next()
+        p.wait()
+        fields = row.keys()
+
+        sql = "DELETE FROM %s" % (out_map, )
+        p2 = grass.feed_command('db.execute', input='-', quiet=True)
+        p2.stdin.write(sql) # Delete old information
+        p2.stdin.close()
+        p2.wait()
+
+        # Loop over new categories
+        p = grass.pipe_command('v.category', input=out_map, option='print')
+        for line in p.stdout:
+            # echo "INSERT into ... () values (...)" | db.execute
+            new_cat = line.strip()
+            row[field] = new_cat
+            values = [str(row[f]) for f in fields]
+            values = ', '.join(values)
+
+            sql = "INSERT INTO %s (%s) VALUES (%s)" % (out_map, ','.join(fields), values)
+            p2 = grass.feed_command('db.execute', input='-', quiet=True)
+            p2.stdin.write(sql)
+            p2.stdin.close()
+            p2.wait()
+        p.wait()
+
 
 if __name__ == "__main__":
     options, flags = grass.parser()
